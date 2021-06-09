@@ -1,4 +1,4 @@
-const axios = require('axios')
+
 const axiosRetry = require('axios-retry')
 const rax = require('retry-axios');
 const rateLimit = require('axios-rate-limit');
@@ -19,9 +19,24 @@ const sendbird = rateLimit(axios.create({
     },
     // timeout: 2000
 
-}),{ maxRequests: 20, perMilliseconds: 400 }
-)
+}),{ maxRequests: 20, perMilliseconds: 400 } )
+
 axiosRetry(sendbird, { retries: 2, shouldResetTimeout: true });
+
+const downloadProfilePhoto = async (key, bucketName = bucketName) =>{
+
+    const params = { Bucket: bucketName, Key: key}
+    logger.info(`[ProfilePhoto]: S3 Object bucket: ${bucketName} | key: ${key}`)
+    try {
+        const data = await s3.getObject(params).promise()
+
+        return data.Body
+    }catch(e){
+        console.log(e)
+        throw e
+    }
+    
+};  
 
 const reqHandler = (c)=>{
     return c
@@ -83,13 +98,13 @@ let sendbirdList = [];
 
 (async()=>{
 
-    for (var i=0; i<250;i++){
+    for (var i=0; i<100;i++){
         sendbirdList.push(sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}}))
         //  sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}})
 
     }
 
-// console.log(await Promise.all( sendbirdList ))
+console.log(await Promise.all( sendbirdList ))
 
 })()
 
