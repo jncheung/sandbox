@@ -94,17 +94,17 @@ sendbird.interceptors.response.use(resHandler, errHandler)
 
 
 // sendbird.interceptors.response.use(null,err=>console.log(err.config.headers.index, err.response.code))
-let sendbirdList = [];
+// let sendbirdList = [];
 
-(async()=>{
+// (async()=>{
 
-    for (var i=0; i<100;i++){
-        sendbirdList.push(sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}}))
-        //  sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}})
+//     for (var i=0; i<100;i++){
+//         sendbirdList.push(sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}}))
+//         //  sendbird.get(`/${SDB_API_VERSION}/${SDB_USER_API_SERVICE}/8034babfc4094f2684790992fb52465c`, {headers: {index: i}})
 
-    }
+//     }
 
-console.log(await Promise.all( sendbirdList ))
+// console.log(await Promise.all( sendbirdList ))
 
-})()
+// })()
 

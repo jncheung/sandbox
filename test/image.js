@@ -1,11 +1,11 @@
-const { sendbirdInstance: sendbird } = require('./axiosInstance')
+const { sendbirdInstance: sendbird, sendbirdRequestBuilder, makeRequestsFromArray } = require('./axiosInstance')
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 
 const FormData = require('form-data')
 const fs = require('fs')
 
-const { downloadProfilePhoto } = require('./sthree')
+const { downloadProfilePhoto,  } = require('./sthree')
 
 // console.log(text)
 
@@ -34,7 +34,7 @@ const updateUserProfilePhoto = async (memberID) =>{
     // console.log($form)
 
     try {
-        const response = await sendbird.put(`/v3/users/${memberID}`, $form, {headers: {...$form.getHeaders(), filePath}} )
+        const response = {endpoint: `/v3/users/${memberID}`, data: $form, headers: {...$form.getHeaders(), filePath } }
         // console.log(response)
         return response
         
@@ -47,12 +47,31 @@ const updateUserProfilePhoto = async (memberID) =>{
 // (async()=>{await updateUserProfilePhoto(`ce100fb31c8c4b2c9d783367d7e2204b`)})()
 
 let arr = []
-for(var i = 0; i < 30; i++){
-    (async()=>{
-        const resp = await updateUserProfilePhoto(`ce100fb31c8c4b2c9d783367d7e2204b`)
-        console.log(resp)
-    })()
-}
+const s3Object = getProfilePhotoFromS3();
+
+s3Object.then(({form: $form, path: filePath})=>{
+    let j=0;
+    for(var i = 0; i < 200; i++){
+       arr.push(sendbird ( sendbirdRequestBuilder( {method: `get`, endpoint: `/v3/users/ce100fb31c8c4b2c9d783367d7e2204b` }) ) )
+    }
+    Promise.all(arr).then(d=>console.log(d.data.profile_url)).catch(err=>console.log(err))
+})
+
+
+
+// for(var i = 0; i < 30; i++){
+//     (async()=>{
+//         try {
+//             const resp = await updateUserProfilePhoto(`ce100fb31c8c4b2c9d783367d7e2204b`)
+//             arr.push(resp)   
+// console.log(arr.length)
+//         } catch (error) {
+//             arr.push(error)
+// console.log(arr.length)
+//         }
+//     })()
+// }
+
 
 // Promise.all(arr)
 // .then(console.log)
