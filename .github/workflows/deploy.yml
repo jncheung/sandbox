@@ -1,0 +1,98 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "whatsapp-booking/**"
+      - ".github/workflows/deploy.yml"
+
+  # Allow manual trigger with optional reason
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Reason for manual deploy
+        required: false
+        default: Manual trigger
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}           # e.g. asia-southeast1
+  SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}   # e.g. whatsapp-booking
+  REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+  REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }} # e.g. whatsapp-booking
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Keyless GCP auth via Workload Identity Federation ──────────────────
+      # More secure than storing a long-lived service account JSON key.
+      # Setup guide: https://github.com/google-github-actions/auth#setup
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      # ── Build & push image ─────────────────────────────────────────────────
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./whatsapp-booking
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Deploy to Cloud Run ────────────────────────────────────────────────
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+          flags: --allow-unauthenticated --min-instances=0 --max-instances=10 --memory=512Mi --cpu=1
+          env_vars: |
+            BUSINESS_NAME=${{ secrets.BUSINESS_NAME }}
+            BUSINESS_SERVICES=${{ secrets.BUSINESS_SERVICES }}
+            BUSINESS_HOURS=${{ secrets.BUSINESS_HOURS }}
+            SLOT_DURATION_MINUTES=${{ secrets.SLOT_DURATION_MINUTES }}
+            GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}
+            WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          secrets: |
+            WHATSAPP_TOKEN=WHATSAPP_TOKEN:latest
+            WEBHOOK_VERIFY_TOKEN=WEBHOOK_VERIFY_TOKEN:latest
+            ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest
+            GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest
+
+      - name: Show deployed URL
+        run: echo "Service deployed to ${{ steps.deploy.outputs.url }}"
+
+      # ── Smoke test ─────────────────────────────────────────────────────────
+      - name: Health check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}/health")
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "Health check passed (HTTP $STATUS)"
